@@ -240,30 +240,6 @@ int main(int argc, char **argv)
         CalibrationFromK4a(files[i].k4a_calibration, files[i].calibration);
         files[i].k4a_transformation = k4a_transformation_create(&files[i].k4a_calibration);
 
-        if (files[i].record_config.wired_sync_mode == K4A_WIRED_SYNC_MODE_MASTER)
-        {
-            printf("Opened master recording file: %s\n", files[i].filename);
-            if (master_found)
-            {
-                printf("ERROR: Multiple master recordings listed!\n");
-                result = K4A_RESULT_FAILED;
-                break;
-            }
-            else
-            {
-                master_found = true;
-            }
-        }
-        else if (files[i].record_config.wired_sync_mode == K4A_WIRED_SYNC_MODE_SUBORDINATE)
-        {
-            printf("Opened subordinate recording file: %s\n", files[i].filename);
-        }
-        else
-        {
-            printf("ERROR: Recording file was not recorded in master/sub mode: %s\n", files[i].filename);
-            result = K4A_RESULT_FAILED;
-            break;
-        }
 
         result = k4a_playback_set_color_conversion(files[i].handle, K4A_IMAGE_FORMAT_COLOR_BGRA32);
 

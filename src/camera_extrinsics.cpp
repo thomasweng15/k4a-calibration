@@ -11,7 +11,9 @@
 #include <open3d/pipelines/registration/Registration.h>
 #include <open3d/pipelines/registration/ColoredICP.h>
 #include <open3d/utility/Console.h>
+#include <open3d/visualization/utility/DrawGeometry.h>
 #include <open3d/io/PointCloudIO.h>
+#include <open3d/geometry/BoundingVolume.h>
 
 
 namespace fs = std::experimental::filesystem;
@@ -134,7 +136,8 @@ bool ExtrinsicsCalibration::CalculateExtrinsics(
             info.cy = calibration.Color.cy;
             info.fx = calibration.Color.fx; // mm
             info.fy = calibration.Color.fy;
-            info.tagsize = 0.22f; // in meters
+            // info.tagsize = 0.22f; // in meters
+            info.tagsize = 0.08f; // in meters
 
             apriltag_pose_t pose;
             double err = estimate_tag_pose(&info, &pose);
@@ -204,51 +207,51 @@ bool ExtrinsicsCalibration::CalculateExtrinsics(
             found = true;
         }
 
-        // Try ChArUco board
-        if (!found) {
-            cout << "No AprilTag detected, trying ChArUco board" << endl;
-            std::vector<int> markerIds;
-            std::vector<std::vector<cv::Point2f> > markerCorners;
-            cv::aruco::detectMarkers(gray, board->dictionary, markerCorners, markerIds, params);
-            if (markerIds.size() > 0) {
-                std::vector<cv::Point2f> charucoCorners;
-                std::vector<int> charucoIds;
-                cv::Mat camMatrix = (cv::Mat_<float>(3,3) << calibration.Color.fx, 0, calibration.Color.cx, 
-                                                            0, calibration.Color.fy, calibration.Color.cy,
-                                                            0, 0, 1);
-                cv::Mat distCoeffs = (cv::Mat_<float>(8,1) << calibration.Color.k[0],calibration.Color.k[1], calibration.Color.p1, calibration.Color.p2,
-                                                            calibration.Color.k[2],calibration.Color.k[3],calibration.Color.k[4],calibration.Color.k[5]);
-                cv::aruco::interpolateCornersCharuco(markerCorners, markerIds, gray, board, charucoCorners, charucoIds, camMatrix, distCoeffs);
-                // if at least one charuco corner detected
-                if (charucoIds.size() > 0) {
-                    cv::Vec3d rvec, tvec;
-                    cout << "Detected ChArUco board with " << charucoIds.size() << " corners" << endl;
-                    bool valid = cv::aruco::estimatePoseCharucoBoard(charucoCorners, charucoIds, board, camMatrix, distCoeffs, rvec, tvec);
-                    if (valid) {
-                        cv::Mat rmat;
-                        cv::Rodrigues(rvec, rmat);
-                        Eigen::Matrix4f transform = Eigen::Matrix4f::Identity();
+        // // Try ChArUco board
+        // if (!found) {
+        //     cout << "No AprilTag detected, trying ChArUco board" << endl;
+        //     std::vector<int> markerIds;
+        //     std::vector<std::vector<cv::Point2f> > markerCorners;
+        //     cv::aruco::detectMarkers(gray, board->dictionary, markerCorners, markerIds, params);
+        //     if (markerIds.size() > 0) {
+        //         std::vector<cv::Point2f> charucoCorners;
+        //         std::vector<int> charucoIds;
+        //         cv::Mat camMatrix = (cv::Mat_<float>(3,3) << calibration.Color.fx, 0, calibration.Color.cx, 
+        //                                                     0, calibration.Color.fy, calibration.Color.cy,
+        //                                                     0, 0, 1);
+        //         cv::Mat distCoeffs = (cv::Mat_<float>(8,1) << calibration.Color.k[0],calibration.Color.k[1], calibration.Color.p1, calibration.Color.p2,
+        //                                                     calibration.Color.k[2],calibration.Color.k[3],calibration.Color.k[4],calibration.Color.k[5]);
+        //         cv::aruco::interpolateCornersCharuco(markerCorners, markerIds, gray, board, charucoCorners, charucoIds, camMatrix, distCoeffs);
+        //         // if at least one charuco corner detected
+        //         if (charucoIds.size() > 0) {
+        //             cv::Vec3d rvec, tvec;
+        //             cout << "Detected ChArUco board with " << charucoIds.size() << " corners" << endl;
+        //             bool valid = cv::aruco::estimatePoseCharucoBoard(charucoCorners, charucoIds, board, camMatrix, distCoeffs, rvec, tvec);
+        //             if (valid) {
+        //                 cv::Mat rmat;
+        //                 cv::Rodrigues(rvec, rmat);
+        //                 Eigen::Matrix4f transform = Eigen::Matrix4f::Identity();
 
-                        for (int row = 0; row < 3; ++row) {
-                            for (int col = 0; col < 3; ++col) {
-                                transform(row, col) = rmat.at<double>(row,col);
-                            }
-                        }
-                        for (int row = 0; row < 3; ++row) {
-                            transform(row, 3) = static_cast<float>( tvec[row] );
-                        }
-                        cout << "Pose: " << endl;
-                        cout << transform << endl;
-                        tag_poses[camera_index] = transform;
-                        const Eigen::Matrix4f tag_pose = tag_poses[0] * tag_poses[camera_index].inverse();
-                        current_transform[camera_index] = tag_pose.cast<double>();
-                        found = true;
-                    }
-                }
+        //                 for (int row = 0; row < 3; ++row) {
+        //                     for (int col = 0; col < 3; ++col) {
+        //                         transform(row, col) = rmat.at<double>(row,col);
+        //                     }
+        //                 }
+        //                 for (int row = 0; row < 3; ++row) {
+        //                     transform(row, 3) = static_cast<float>( tvec[row] );
+        //                 }
+        //                 cout << "Pose: " << endl;
+        //                 cout << transform << endl;
+        //                 tag_poses[camera_index] = transform;
+        //                 const Eigen::Matrix4f tag_pose = tag_poses[0] * tag_poses[camera_index].inverse();
+        //                 current_transform[camera_index] = tag_pose.cast<double>();
+        //                 found = true;
+        //             }
+        //         }
 
-            }
+        //     }
 
-        }
+        // }
 
         // cv::imshow(to_string(camera_index), image);
         // if (cv::waitKey(30) >= 0)
@@ -323,15 +326,25 @@ bool ExtrinsicsCalibration::CalculateExtrinsics(
             return false;
         }
         cloud_i->Transform(center_transform.cast<double>() * current_transform[camera_index]);
+        
+        // Crop 
+        // open3d::geometry::AxisAlignedBoundingBox bbox(Eigen::Vector3d(-0.8, -0.8, -0.5), Eigen::Vector3d(0.8, 0.8, 0.5));
+        // cloud_i = cloud_i->Crop(bbox);
+
         string filename = "cloud_" + to_string(camera_index) + ".ply";
         open3d::io::WritePointCloudToPLY(filename, *cloud_i, true);
+        // open3d::io::WritePointCloudToPLY(filename, *cropped_i, true);
     }
 
 #if 1
     // Muti-stage Colored ICP
-    std::vector<double> voxel_radius{0.04, 0.02, 0.01};
-    std::vector<int> max_iter{50, 30, 14};
-    for(int stage = 0; stage < 3; ++stage)
+    // std::vector<double> voxel_radius{0.04, 0.02, 0.01};
+    std::vector<double> voxel_radius{0.04, 0.02, 0.005, 0.001};
+    // std::vector<double> voxel_radius{0.02, 0.01, 0.005};
+    // std::vector<int> max_iter{50, 30, 14};
+    std::vector<int> max_iter{200, 100, 60, 28};
+    // std::vector<int> max_iter{2500, 230, 114};
+    for(int stage = 0; stage < 4; ++stage)
     {
         const double radius = voxel_radius[stage];
         const int iter = max_iter[stage];
@@ -342,6 +355,8 @@ bool ExtrinsicsCalibration::CalculateExtrinsics(
             cout  <<"DownSample failed for i=0"<< endl;
             return false;
         }
+        open3d::geometry::AxisAlignedBoundingBox bbox(Eigen::Vector3d(-1.5, -1.5, -1.5), Eigen::Vector3d(1.5, 1.5, 1.5));
+        cloud_0 = cloud_0->Crop(bbox);
 
         for (int camera_index = 1; camera_index < camera_count; ++camera_index)
         {
@@ -350,18 +365,21 @@ bool ExtrinsicsCalibration::CalculateExtrinsics(
                 cout  <<"DownSample failed for i = " << camera_index << endl;
                 return false;
             }
+            cloud_i = cloud_i->Crop(bbox);
 
             open3d::pipelines::registration::ICPConvergenceCriteria criteria(1e-6, 1e-6, iter);
 
             // How much it tends towards using the geometry instead of the color
-            const double lambda_geometric = 0.968;
+            // const double lambda_geometric = 0.968;
+            // const double lambda_geometric = 0.1;
+            const double lambda_geometric = 0.999;
             open3d::pipelines::registration::TransformationEstimationForColoredICP transform_estimate(lambda_geometric);
 
             auto result = open3d::pipelines::registration::RegistrationColoredICP(
             *cloud_i,
             *cloud_0,
             voxel_radius[stage],
-            current_transform[camera_index],
+            current_transform[camera_index], // identity
             transform_estimate,
             criteria);
             
@@ -370,10 +388,14 @@ bool ExtrinsicsCalibration::CalculateExtrinsics(
             cout <<"==========================================================="<< endl;
             cout <<"Color ICP refinement for "<< camera_index <<" -> 0" <<endl;;
 
-            // cloud_i->Transform(current_transform[camera_index]);
-            // open3d::visualization::DrawGeometries({cloud_0, cloud_i}, "icp", 1600,900);
+            cloud_i->Transform(current_transform[camera_index]);
+            open3d::visualization::DrawGeometries({cloud_0, cloud_i}, "icp", 1600,900);
 
+            // transform from camera 0 to marker, multiply with current transform, which is camera 0 to i?
+            // cout << center_transform << endl;
+            // cout << current_transform[camera_index].cast<float>() << endl;
             output[camera_index] = center_transform * current_transform[camera_index].cast<float>();
+            // cout << center_transform * current_transform[camera_index].cast<float>() << endl;
         } 
     }
 #endif
@@ -397,25 +419,27 @@ bool ExtrinsicsCalibration::CalculateExtrinsics(
         t.matrix() = cloud_transform;
 
         // Transform to Depth camera coordinate
-        CameraCalibration calibration = frames[camera_index].Calibration;
-        Eigen::Matrix3f r_depth = Eigen::Map<Eigen::Matrix3f>(calibration.RotationFromDepth, 3, 3).transpose(); // row major
-        Eigen::Vector3f t_depth = Eigen::Map<Eigen::Vector3f>(calibration.TranslationFromDepth, 3, 1) / 1000.0f; // in meters
-        t.rotate(r_depth);
-        t.translate(t_depth);
+        // CameraCalibration calibration = frames[camera_index].Calibration;
+        // Eigen::Matrix3f r_depth = Eigen::Map<Eigen::Matrix3f>(calibration.RotationFromDepth, 3, 3).transpose(); // row major
+        // Eigen::Vector3f t_depth = Eigen::Map<Eigen::Vector3f>(calibration.TranslationFromDepth, 3, 1) / 1000.0f; // in meters
+        // t.rotate(r_depth);
+        // t.translate(t_depth);
 
         // Flip y and z for OpenGL coordinate system
-        Eigen::Matrix4f yz_transform = Eigen::Matrix4f::Identity();
-        yz_transform(1,1) = -1.0;
-        yz_transform(2,2) = -1.0;
+        // Eigen::Matrix4f yz_transform = Eigen::Matrix4f::Identity();
+        // yz_transform(1,1) = -1.0;
+        // yz_transform(2,2) = -1.0;
         CameraExtrinsics extrinsicsmat;
-        t.matrix() = (yz_transform * t.matrix() * yz_transform);
+        // t.matrix() = (yz_transform * t.matrix() * yz_transform);
+        std::cout << t.matrix() << std::endl;
         extrinsicsmat.translation = t.translation();
         extrinsicsmat.rotation = Eigen::Quaternionf(t.rotation());
 
         // Save JSON file
         std::ofstream file;
         fs::path path = fs::path(frames[camera_index].filename).parent_path();
-        path /= "cn0" + to_string(camera_count - camera_index) + ".json";
+        // path /= "cn0" + to_string(camera_count - camera_index) + ".json";
+        path /= "cn0" + to_string(camera_index) + ".json";
         file.open(path, std::ofstream::out);
         {
             cereal::JSONOutputArchive archive( file );
@@ -430,71 +454,71 @@ bool ExtrinsicsCalibration::CalculateExtrinsics(
     return true;
 }
 
-bool ExtrinsicsCalibration::RefineExtrinsics(
-    const std::vector<FrameInfo>& frames,
-    std::vector<AlignmentTransform>& extrinsics)
-{
-    if (extrinsics.size() != frames.size()) {
-        cout  <<"Invalid input"<< endl;
-        return false;
-    }
+// bool ExtrinsicsCalibration::RefineExtrinsics(
+//     const std::vector<FrameInfo>& frames,
+//     std::vector<AlignmentTransform>& extrinsics)
+// {
+//     if (extrinsics.size() != frames.size()) {
+//         cout  <<"Invalid input"<< endl;
+//         return false;
+//     }
 
-    const int camera_count = static_cast<int>( frames.size() );
+//     const int camera_count = static_cast<int>( frames.size() );
 
-    cout <<"==========================================================="<< endl;
-    cout <<"!!! Starting extrinsics calibration for " << camera_count << " cameras" << endl;
+//     cout <<"==========================================================="<< endl;
+//     cout <<"!!! Starting extrinsics calibration for " << camera_count << " cameras" << endl;
 
-    Eigen::Matrix4f center_transform;
-    extrinsics[0].Set(center_transform);
+//     Eigen::Matrix4f center_transform;
+//     extrinsics[0].Set(center_transform);
 
-    Eigen::Matrix4f inv_center_transform = center_transform.inverse();
+//     Eigen::Matrix4f inv_center_transform = center_transform.inverse();
 
-    std::shared_ptr<open3d::geometry::PointCloud> cloud_0;
-    if (!GenerateFullCloudFromFrames(frames[0])) {
-        cout  <<"GenerateCloudFromFrames failed for i=0"<< endl;
-        return false;
-    }
+//     std::shared_ptr<open3d::geometry::PointCloud> cloud_0;
+//     if (!GenerateFullCloudFromFrames(frames[0])) {
+//         cout  <<"GenerateCloudFromFrames failed for i=0"<< endl;
+//         return false;
+//     }
 
-    for (int camera_index = 1; camera_index < camera_count; ++camera_index)
-    {
+//     for (int camera_index = 1; camera_index < camera_count; ++camera_index)
+//     {
 
-        std::shared_ptr<open3d::geometry::PointCloud> cloud_i;
-        if (!GenerateFullCloudFromFrames(frames[camera_index])) {
-            cout  <<"GenerateCloudFromFrames failed for i= " << camera_index <<endl;
-            return false;
-        }
+//         std::shared_ptr<open3d::geometry::PointCloud> cloud_i;
+//         if (!GenerateFullCloudFromFrames(frames[camera_index])) {
+//             cout  <<"GenerateCloudFromFrames failed for i= " << camera_index <<endl;
+//             return false;
+//         }
 
-        cout <<"==========================================================="<< endl;
+//         cout <<"==========================================================="<< endl;
 
-        const double max_distance = 0.01; // meters
-        open3d::pipelines::registration::ICPConvergenceCriteria criteria(1e-16, 1e-16, 500);
+//         const double max_distance = 0.01; // meters
+//         open3d::pipelines::registration::ICPConvergenceCriteria criteria(1e-16, 1e-16, 500);
 
-        // How much it tends towards using the geometry instead of the color
-        const double lambda_geometric = 0.96;
-        open3d::pipelines::registration::TransformationEstimationForColoredICP transform_estimate(lambda_geometric);
+//         // How much it tends towards using the geometry instead of the color
+//         const double lambda_geometric = 0.96;
+//         open3d::pipelines::registration::TransformationEstimationForColoredICP transform_estimate(lambda_geometric);
 
-        Eigen::Matrix4f transform_i;
-        extrinsics[camera_index].Set(transform_i);
+//         Eigen::Matrix4f transform_i;
+//         extrinsics[camera_index].Set(transform_i);
 
-        // Left multiply to undo the "center transform" from full registration,
-        // leaving just the prior transform from cloud_i to cloud_0
-        Eigen::Matrix4f current_transform_f = inv_center_transform * transform_i;
-        Eigen::Matrix4d current_transform_d = current_transform_f.cast<double>();
+//         // Left multiply to undo the "center transform" from full registration,
+//         // leaving just the prior transform from cloud_i to cloud_0
+//         Eigen::Matrix4f current_transform_f = inv_center_transform * transform_i;
+//         Eigen::Matrix4d current_transform_d = current_transform_f.cast<double>();
 
-        auto result = open3d::pipelines::registration::RegistrationColoredICP(
-            *cloud_i,
-            *cloud_0,
-            max_distance,
-            current_transform_d,
-            transform_estimate,
-            criteria);
+//         auto result = open3d::pipelines::registration::RegistrationColoredICP(
+//             *cloud_i,
+//             *cloud_0,
+//             max_distance,
+//             current_transform_d,
+//             transform_estimate,
+//             criteria);
 
-        cout <<"==========================================================="<< endl;
+//         cout <<"==========================================================="<< endl;
 
-        auto transform4x4 = result.transformation_.cast<float>();
+//         auto transform4x4 = result.transformation_.cast<float>();
 
-        extrinsics[camera_index] = center_transform * transform4x4;
-    } // next image
+//         extrinsics[camera_index] = center_transform * transform4x4;
+//     } // next image
 
-    return true;
-}
+//     return true;
+// }
